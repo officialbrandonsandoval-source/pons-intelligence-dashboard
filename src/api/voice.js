@@ -5,7 +5,7 @@ export const voiceAPI = {
   // Start a new voice session
   async startSession() {
     try {
-      return await apiClient.post('/voice/session/start', {
+      return await apiClient.post('/api/voice/session/start', {
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
@@ -17,14 +17,15 @@ export const voiceAPI = {
   // End an active voice session
   async endSession(sessionId) {
     try {
-      return await apiClient.post('/voice/session/end', { sessionId });
+      return await apiClient.post('/api/voice/session/end', { sessionId });
     } catch (error) {
       console.error('Failed to end voice session:', error);
       throw error;
     }
   },
 
-  // Send audio data for processing
+  // Upload audio to backend as multipart/form-data
+  // Endpoint requirement: POST /api/voice/command
   async sendAudioBlob(audioBlob, sessionId) {
     try {
       const formData = new FormData();
@@ -33,7 +34,7 @@ export const voiceAPI = {
         formData.append('sessionId', sessionId);
       }
 
-      return await apiClient.postFormData('/voice/process', formData);
+      return await apiClient.postFormData('/api/voice/command', formData);
     } catch (error) {
       console.error('Failed to send audio:', error);
       throw error;
@@ -43,7 +44,7 @@ export const voiceAPI = {
   // Send a text command (for testing or fallback)
   async sendTextCommand(command, sessionId) {
     try {
-      return await apiClient.post('/voice/command', {
+      return await apiClient.post('/api/voice/command', {
         command,
         sessionId,
         timestamp: new Date().toISOString(),
@@ -57,7 +58,7 @@ export const voiceAPI = {
   // Get transcript for a session
   async getTranscript(sessionId) {
     try {
-      return await apiClient.get(`/voice/transcript/${sessionId}`);
+      return await apiClient.get(`/api/voice/transcript/${sessionId}`);
     } catch (error) {
       console.error('Failed to get transcript:', error);
       throw error;

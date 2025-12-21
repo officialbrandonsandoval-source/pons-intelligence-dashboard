@@ -1,0 +1,26 @@
+.loadingState {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #a1a1aa;
+  font-size: 14px;
+}
+
+.loadingState__spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  border-top-color: #8b5cf6;
+  animation: loadingStateSpin 0.9s linear infinite;
+}
+
+@keyframes loadingStateSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loadingState__label {
+  line-height: 1;
+}

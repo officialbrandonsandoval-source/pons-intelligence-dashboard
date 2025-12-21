@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import Landing from './pages/Landing';
 import ConnectCRM from './pages/ConnectCRM';
-import Dashboard from './pages/Dashboard';
+import ConnectGoHighLevel from './pages/ConnectGoHighLevel';
+import CopilotDashboard from './pages/CopilotDashboard';
 import Settings from './pages/Settings';
 
 function App() {
@@ -13,8 +14,11 @@ function App() {
         return <Landing onNavigate={setCurrentPage} />;
       case 'connect-crm':
         return <ConnectCRM onNavigate={setCurrentPage} />;
+      case '/connect/gohighlevel':
+        return <ConnectGoHighLevel onNavigate={setCurrentPage} />;
       case 'dashboard':
-        return <Dashboard onNavigate={setCurrentPage} />;
+      case '/dashboard':
+        return <CopilotDashboard onNavigate={setCurrentPage} />;
       case 'settings':
         return <Settings onNavigate={setCurrentPage} />;
       default:

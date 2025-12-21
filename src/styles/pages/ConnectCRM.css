@@ -52,12 +52,18 @@
   border-radius: var(--radius-lg);
   padding: var(--spacing-xl);
   text-align: center;
-  transition: all 0.2s ease;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+  outline: none;
 }
 
 .crm-card:hover {
   border-color: var(--purple-primary);
   transform: translateY(-2px);
+}
+
+.crm-card:focus-visible {
+  border-color: rgba(124, 58, 237, 0.75);
+  box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.18);
 }
 
 .crm-icon {
@@ -86,8 +92,90 @@
   color: var(--text-secondary);
 }
 
+.crm-card-footer {
+  margin-top: var(--spacing-lg);
+  display: flex;
+  justify-content: center;
+}
+
+.crm-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.crm-pill--oauth {
+  border-color: rgba(124, 58, 237, 0.35);
+  background: rgba(124, 58, 237, 0.10);
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.crm-pill--active {
+  border-color: rgba(124, 58, 237, 0.45);
+  background: rgba(124, 58, 237, 0.14);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.crm-card--disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.crm-card--disabled:hover {
+  border-color: var(--border-subtle);
+  transform: none;
+  box-shadow: none;
+}
+
+.crm-card--disabled .crm-icon {
+  background: rgba(255, 255, 255, 0.10);
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.crm-pill--disabled {
+  border-color: rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.65);
+}
+
+/* GoHighLevel variant (keeps other cards unchanged) */
+.crm-card--gohighlevel {
+  border-color: rgba(124, 58, 237, 0.35);
+  background:
+    radial-gradient(900px 300px at 10% 0%, rgba(124, 58, 237, 0.20), transparent 60%),
+    var(--bg-secondary);
+}
+
+.crm-card--gohighlevel:hover {
+  border-color: var(--purple-primary);
+  box-shadow: 0 14px 40px rgba(124, 58, 237, 0.15);
+}
+
+.crm-card--gohighlevel:focus-visible {
+  box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.18), 0 14px 40px rgba(124, 58, 237, 0.15);
+}
+
+.crm-icon--gohighlevel {
+  background: linear-gradient(180deg, rgba(124, 58, 237, 1), rgba(109, 40, 217, 1));
+  box-shadow: 0 10px 30px rgba(124, 58, 237, 0.22);
+}
+
 @media (max-width: 768px) {
+  .connect-crm-page {
+    padding: var(--spacing-lg);
+  }
+
   .crm-options {
     grid-template-columns: 1fr;
+    gap: var(--spacing-md);
   }
 }

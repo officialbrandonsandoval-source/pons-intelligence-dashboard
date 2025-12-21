@@ -6,6 +6,12 @@ function ConnectCRM({ onNavigate }) {
     onNavigate('dashboard');
   };
 
+  const handleGoHighLevel = () => {
+    // Note: App-level routing is currently state-based.
+    // This string is intentionally the requested path so it can be wired up in App.jsx next.
+    onNavigate('/connect/gohighlevel');
+  };
+
   return (
     <div className="connect-crm-page">
       <div className="connect-crm-container">
@@ -23,31 +29,58 @@ function ConnectCRM({ onNavigate }) {
           </p>
           
           <div className="crm-options">
-            <button 
-              className="crm-card"
-              onClick={() => handleConnect('Salesforce')}
+            <button
+              className="crm-card crm-card--disabled"
+              disabled
+              aria-disabled="true"
+              aria-label="Salesforce (coming soon)"
             >
-              <div className="crm-icon">SF</div>
+              <div className="crm-icon" aria-hidden="true">SF</div>
               <h3 className="crm-name">Salesforce</h3>
-              <p className="crm-description">Connect your Salesforce account</p>
+              <p className="crm-description">Coming soon</p>
+              <div className="crm-card-footer">
+                <span className="crm-pill crm-pill--disabled">Disabled</span>
+              </div>
             </button>
             
             <button 
               className="crm-card"
               onClick={() => handleConnect('HubSpot')}
+              aria-label="HubSpot (OAuth)"
             >
               <div className="crm-icon">HS</div>
               <h3 className="crm-name">HubSpot</h3>
-              <p className="crm-description">Connect your HubSpot account</p>
+              <p className="crm-description">Connect via OAuth</p>
+              <div className="crm-card-footer">
+                <span className="crm-pill crm-pill--oauth">OAuth</span>
+              </div>
             </button>
             
-            <button 
-              className="crm-card"
-              onClick={() => handleConnect('Pipedrive')}
+            <button
+              className="crm-card crm-card--disabled"
+              disabled
+              aria-disabled="true"
+              aria-label="Pipedrive (coming soon)"
             >
-              <div className="crm-icon">PD</div>
+              <div className="crm-icon" aria-hidden="true">PD</div>
               <h3 className="crm-name">Pipedrive</h3>
-              <p className="crm-description">Connect your Pipedrive account</p>
+              <p className="crm-description">Coming soon</p>
+              <div className="crm-card-footer">
+                <span className="crm-pill crm-pill--disabled">Disabled</span>
+              </div>
+            </button>
+
+            <button
+              className="crm-card crm-card--gohighlevel"
+              onClick={handleGoHighLevel}
+              aria-label="GoHighLevel (connect)"
+            >
+              <div className="crm-icon crm-icon--gohighlevel">GHL</div>
+              <h3 className="crm-name">GoHighLevel</h3>
+              <p className="crm-description">Connect your GoHighLevel account</p>
+              <div className="crm-card-footer">
+                <span className="crm-pill crm-pill--active">Active</span>
+              </div>
             </button>
           </div>
         </div>
