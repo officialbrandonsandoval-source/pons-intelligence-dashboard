@@ -94,6 +94,16 @@ npm run preview
 
 The app runs on `http://localhost:3000` by default (or next available port).
 
+## 🚢 Deployment (Vercel)
+
+- This project is configured to deploy cleanly on Vercel as a single-page app.
+- In Vercel, **do not set** `BASE_PATH` (it should be empty) so assets load from `/`.
+- If you ever deploy under a subpath (like GitHub Pages), set `BASE_PATH=/your-subpath/` at build time.
+
+### GitHub Pages note
+
+The GitHub Pages workflow in `.github/workflows/deploy.yml` is now **manual-only** (`workflow_dispatch`) to avoid accidental deploys while Vercel is the primary host.
+
 ## 🎤 Voice System Architecture
 
 ### Voice States
