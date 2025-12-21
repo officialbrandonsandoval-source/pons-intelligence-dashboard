@@ -1,0 +1,61 @@
+.revenue-leak-card .leak-amount {
+  font-size: 2.5rem;
+  font-weight: var(--font-weight-bold);
+  color: #EF4444;
+  margin-bottom: 0.25rem;
+  letter-spacing: -0.02em;
+}
+
+.revenue-leak-card .leak-label {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-bottom: 1.5rem;
+  font-weight: var(--font-weight-medium);
+}
+
+.leak-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.leak-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  transition: all 0.2s ease;
+}
+
+.leak-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--border-medium);
+}
+
+.leak-item-info {
+  flex: 1;
+}
+
+.leak-item-label {
+  font-size: 0.875rem;
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+}
+
+.leak-item-count {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-normal);
+}
+
+.leak-item-value {
+  font-size: 1.125rem;
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
