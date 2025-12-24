@@ -5,7 +5,7 @@ import '../styles/components/VoiceButton.css';
 // Voice states
 const VOICE_STATES = {
   IDLE: 'idle',
-  RECORDING: 'recording',
+  LISTENING: 'listening',
   PROCESSING: 'processing',
   SPEAKING: 'speaking',
   ERROR: 'error',
@@ -41,7 +41,7 @@ function VoiceButton({ onResult, disabled = false, disabledReason = '' }) {
         case VOICE_STATES.IDLE:
           await startRecording();
           break;
-        case VOICE_STATES.RECORDING:
+        case VOICE_STATES.LISTENING:
           await stopRecording();
           break;
         case VOICE_STATES.SPEAKING:
@@ -57,30 +57,34 @@ function VoiceButton({ onResult, disabled = false, disabledReason = '' }) {
       }
     } catch (error) {
       console.error('Voice interaction error:', error);
-      setErrorMessage(error.message);
+      setErrorMessage(error?.message || 'Voice error');
       setVoiceState(VOICE_STATES.ERROR);
     }
   };
 
   const startRecording = async () => {
     try {
+      // Fail fast: do not request microphone until backend session start succeeds.
+      // Requirement: 1) POST /api/voice/session/start
+      const sessionData = await startSession();
+      sessionIdRef.current = sessionData?.sessionId;
+
+      // Requirement: 2) If success → show "Listening"
+      setVoiceState(VOICE_STATES.LISTENING);
+      setErrorMessage('');
+
       // Initialize microphone if needed
       if (!recorderRef.current.stream) {
         await recorderRef.current.initialize();
       }
 
-      // Start a new session
-      const sessionData = await startSession();
-      sessionIdRef.current = sessionData.sessionId;
-
       // Start recording
       recorderRef.current.startRecording();
-      setVoiceState(VOICE_STATES.RECORDING);
     } catch (error) {
-      if (error.message.includes('denied')) {
-        throw new Error('Microphone access denied. Please enable microphone permissions.');
-      }
-      throw error;
+      // Requirement: 3) If error → surface JSON error message
+      // Our axios client wraps JSON payload messages into error.message already.
+      const msg = error?.message || 'Failed to start voice session';
+      throw new Error(msg);
     }
   };
 
@@ -112,16 +116,16 @@ function VoiceButton({ onResult, disabled = false, disabledReason = '' }) {
     } catch (error) {
       console.error('Processing error:', error);
       setVoiceState(VOICE_STATES.IDLE);
-      throw error;
+      throw new Error(error?.message || 'Voice processing failed');
     }
   };
 
   const getButtonContent = () => {
     switch (voiceState) {
-      case VOICE_STATES.RECORDING:
+      case VOICE_STATES.LISTENING:
         return {
           icon: <RecordingIcon />,
-          label: 'Recording...',
+          label: 'Listening',
         };
       case VOICE_STATES.PROCESSING:
         return {
@@ -158,7 +162,7 @@ function VoiceButton({ onResult, disabled = false, disabledReason = '' }) {
         title={label}
       >
         {icon}
-        {voiceState === VOICE_STATES.RECORDING && (
+        {voiceState === VOICE_STATES.LISTENING && (
           <span className="recording-indicator"></span>
         )}
         {voiceState === VOICE_STATES.PROCESSING && (

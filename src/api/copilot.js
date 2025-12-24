@@ -2,7 +2,7 @@ import { api, apiClient } from './client';
 
 export const copilotAPI = {
   async init({ source, userId, mode }) {
-    return apiClient.post('api/copilot', {
+    return apiClient.post('/api/copilot', {
       source,
       userId,
       mode,
@@ -10,7 +10,7 @@ export const copilotAPI = {
   },
 
   async ask({ source, userId, mode, query }) {
-    return apiClient.post('api/copilot', {
+    return apiClient.post('/api/copilot', {
       source,
       userId,
       mode,

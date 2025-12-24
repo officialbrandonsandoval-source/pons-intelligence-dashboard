@@ -5,7 +5,7 @@ import CoreMetrics from '../components/copilot/CoreMetrics';
 import AskBar from '../components/copilot/AskBar';
 import Conversation from '../components/copilot/Conversation';
 import ModeToggle from '../components/copilot/ModeToggle';
-import { copilotAPI } from '../api/copilot';
+import { postInsights } from '../api/insights';
 import { speakText } from '../api/voice';
 import { getGHLStatus } from '../api/client';
 import '../styles/copilot.css';
@@ -76,20 +76,9 @@ function CopilotDashboard({ onNavigate }) {
           return;
         }
 
-        const res = await copilotAPI.init({
-          source: 'gohighlevel',
-          userId: 'dev',
-          mode: 'hybrid',
-        });
+        const initialGreeting = 'I’m online. Ask me about cash at risk, velocity, or what to do next.';
 
-        if (cancelled) return;
-
-        const initialGreeting =
-          res?.greeting ||
-          res?.message ||
-          'I’m online. Ask me about cash at risk, velocity, or what to do next.';
-
-        setMetrics(res?.metrics || res?.data?.metrics || null);
+        setMetrics(null);
         setMessages([{ id: makeId(), role: 'assistant', content: initialGreeting }]);
         setStatus('ready');
 
@@ -141,23 +130,46 @@ function CopilotDashboard({ onNavigate }) {
     setMessages((prev) => [...prev, userMsg]);
 
     try {
-      const res = await copilotAPI.ask({
-        source: 'gohighlevel',
+      // Requirement: When user asks a question, call POST /api/insights with mock/demo deals
+      const res = await postInsights({
         userId: 'dev',
-        mode,
+        source: 'demo',
         query,
       });
 
-      const answer = res?.answer || res?.response || res?.message || 'Done.';
-      const assistantMsg = { id: makeId(), role: 'assistant', content: answer };
-      setMessages((prev) => [...prev, assistantMsg]);
+      const cashAtRisk = res?.cashAtRisk;
+      const velocity = res?.velocity;
+      const nextBestAction = res?.nextBestAction;
+      const voiceSummary = res?.voiceSummary;
 
+      const lines = [
+        cashAtRisk ? `Cash at Risk: ${cashAtRisk}` : null,
+        velocity ? `Velocity: ${velocity}` : null,
+        nextBestAction ? `Next Best Action: ${nextBestAction}` : null,
+        voiceSummary ? `Summary: ${voiceSummary}` : null,
+      ].filter(Boolean);
+
+      const text = lines.length > 0 ? lines.join('\n') : 'No insights returned.';
+
+      setMessages((prev) => [...prev, { id: makeId(), role: 'assistant', content: text }]);
+
+      // Display in the metric cards too (text-only, no charts/tables)
+      setMetrics({
+        cashAtRisk: typeof cashAtRisk === 'number' ? { amount: cashAtRisk, deals: 0 } : cashAtRisk,
+        velocity:
+          typeof velocity === 'string'
+            ? { label: velocity, wow: 0 }
+            : velocity,
+        topAction:
+          typeof nextBestAction === 'string'
+            ? { label: nextBestAction, detail: voiceSummary || '' }
+            : nextBestAction,
+        voiceSummary,
+      });
+
+      // Requirement: Text + voice only
       if (shouldSpeak) {
-        await speakGreeting(answer);
-      }
-
-      if (res?.metrics) {
-        setMetrics((prev) => ({ ...(prev || {}), ...res.metrics }));
+        await speakGreeting(voiceSummary || text);
       }
     } catch (err) {
       const assistantMsg = {
@@ -203,9 +215,7 @@ function CopilotDashboard({ onNavigate }) {
             role="status"
             aria-live="polite"
           >
-            <div style={{ fontWeight: 800, marginBottom: 6 }}>
-              GoHighLevel is not connected. First connect.
-            </div>
+            <div style={{ fontWeight: 800, marginBottom: 6 }}>GoHighLevel not connected</div>
             <div style={{ color: '#a1a1aa', fontSize: 13 }}>
               {ghlStatusLoading
                 ? 'Checking connection status…'
@@ -281,6 +291,7 @@ function CopilotDashboard({ onNavigate }) {
             <Conversation messages={messages} />
             <AskBar
               disabled={status !== 'ready' || !isConnectedGateOpen}
+              hidden={!isConnectedGateOpen}
               mode={mode}
               onAsk={handleAsk}
               onVoiceResult={handleVoiceResult}

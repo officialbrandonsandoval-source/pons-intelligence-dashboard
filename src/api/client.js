@@ -7,12 +7,15 @@ import axios from 'axios';
 const RAW_API_BASE = import.meta.env.VITE_API_URL;
 
 if (!RAW_API_BASE || String(RAW_API_BASE).trim().length === 0) {
-  throw new Error(
-    'Missing VITE_API_URL. Set VITE_API_URL to your backend base URL (e.g. https://your-backend.com).'
-  );
+  const message =
+    'Missing VITE_API_URL. Set VITE_API_URL to your backend base URL (e.g. https://your-backend.com).';
+  // Explicitly log for visibility in production builds.
+  // eslint-disable-next-line no-console
+  console.error(message);
+  throw new Error(message);
 }
 
-const API_BASE = String(RAW_API_BASE).replace(/\/+$/, '');
+const API_BASE = String(RAW_API_BASE).trim().replace(/\/+$/, '');
 
 // Build an absolute URL from the API base.
 // Disallows relative URLs to avoid accidental same-origin calls in production.
@@ -25,15 +28,14 @@ export function apiUrl(pathname) {
     return pathname;
   }
 
-  if (pathname.startsWith('/')) {
-    // Enforce repo convention: callers should not build same-origin paths.
-    // They should either pass a fully-qualified URL or use an API module that calls `apiUrl` internally.
+  // All API calls must be absolute and under /api/...
+  if (!pathname.startsWith('/api/')) {
     throw new Error(
-      `Relative API path disallowed: "${pathname}". Use an API module or call apiUrl("/api/...") in that module to build a fully-qualified URL.`
+      `API path must be absolute and start with "/api/": received "${pathname}"`
     );
   }
 
-  return `${API_BASE}/${pathname}`;
+  return `${API_BASE}${pathname}`;
 }
 
 const API_KEY = import.meta.env.VITE_API_KEY ?? '';
@@ -151,7 +153,7 @@ export const connectGHL = async (userId, apiKey, locationId) => {
     throw new Error('Missing required fields: userId, apiKey, locationId');
   }
 
-  return apiClient.post('api/auth/ghl', {
+  return apiClient.post('/api/auth/ghl', {
     userId,
     apiKey,
     locationId,

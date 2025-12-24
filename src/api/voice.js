@@ -9,7 +9,7 @@ import { api, apiClient } from './client';
 export async function startSession() {
   // Endpoint: POST /api/voice/session/start
   // Contract requirement: must call {VITE_API_URL}/api/voice/session/start (never same-origin /api).
-  return apiClient.post('api/voice/session/start', {
+  return apiClient.post('/api/voice/session/start', {
     timestamp: new Date().toISOString(),
   });
 }
@@ -33,7 +33,7 @@ export async function sendVoiceCommand({ audioBlob, sessionId }) {
     formData.append('sessionId', sessionId);
   }
 
-  return apiClient.postFormData('api/voice/command', formData);
+  return apiClient.postFormData('/api/voice/command', formData);
 }
 
 export async function speakText({ text, voice, format } = {}) {
@@ -42,7 +42,7 @@ export async function speakText({ text, voice, format } = {}) {
     throw new Error('speakText requires non-empty text');
   }
 
-  return apiClient.post('api/voice/speak', {
+  return apiClient.post('/api/voice/speak', {
     text,
     ...(voice ? { voice } : {}),
     ...(format ? { format } : {}),

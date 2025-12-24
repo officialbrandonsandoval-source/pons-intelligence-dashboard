@@ -27,7 +27,7 @@ function ConnectGoHighLevel({ onNavigate }) {
       window.setTimeout(() => {
         // Requested redirect path. App routing currently uses state strings;
         // we'll map this in App.jsx to the existing dashboard page.
-        onNavigate('/dashboard');
+        onNavigate('/copilot');
       }, 450);
     } catch (err) {
       setStatus('error');

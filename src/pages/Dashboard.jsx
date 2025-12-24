@@ -5,7 +5,7 @@ import TopActionCard from '../components/dashboard/TopActionCard';
 import RevenueLeaks from '../components/dashboard/RevenueLeaks';
 import DealPipeline from '../components/DealPipeline';
 import LoadingState from '../components/dashboard/LoadingState';
-import { apiClient, apiUrl } from '../api/client';
+import { apiClient, apiUrl, getGHLStatus } from '../api/client';
 import '../styles/pages/Dashboard.css';
 
 function Dashboard({ onNavigate }) {
@@ -13,11 +13,14 @@ function Dashboard({ onNavigate }) {
   const [status, setStatus] = useState('idle'); // idle | loading | success | error
   const [errorMessage, setErrorMessage] = useState('');
 
+  const [ghlConnected, setGhlConnected] = useState(false);
+  const [ghlStatusLoading, setGhlStatusLoading] = useState(true);
+
   // Local helper to keep this change self-contained.
   // Expected backend response: { insight: ... }
   const getInsights = useCallback(async ({ source, userId }) => {
     const url = apiUrl(
-      `api/insights?source=${encodeURIComponent(source)}&userId=${encodeURIComponent(userId)}`
+      `/api/insights?source=${encodeURIComponent(source)}&userId=${encodeURIComponent(userId)}`
     );
     return apiClient.get(url);
   }, []);
@@ -38,7 +41,46 @@ function Dashboard({ onNavigate }) {
   }, [getInsights]);
 
   useEffect(() => {
-    fetchInsights();
+    let cancelled = false;
+
+    const init = async () => {
+      setGhlStatusLoading(true);
+
+      try {
+        // Requirement: On dashboard load: GET /api/auth/ghl/status?userId=dev
+        const statusRes = await getGHLStatus('dev');
+        const isConnected = Boolean(
+          statusRes?.connected ?? statusRes?.isConnected ?? statusRes?.ok
+        );
+
+        if (cancelled) return;
+
+        setGhlConnected(isConnected);
+        setGhlStatusLoading(false);
+
+        if (isConnected) {
+          fetchInsights();
+        } else {
+          // Don't attempt insights until connected.
+          setInsight(null);
+          setStatus('success');
+        }
+      } catch (err) {
+        if (cancelled) return;
+        setGhlConnected(false);
+        setGhlStatusLoading(false);
+        setInsight(null);
+        setStatus('success');
+        // Non-fatal: still show dashboard skeleton, but keep everything gated.
+        setErrorMessage(err?.message || 'Failed to check GoHighLevel status');
+      }
+    };
+
+    init();
+
+    return () => {
+      cancelled = true;
+    };
   }, [fetchInsights]);
 
   const handleBackToConnect = () => {
@@ -106,6 +148,50 @@ function Dashboard({ onNavigate }) {
       
       <main className="dashboardMain">
         <div className="dashboardContainer">
+          {!ghlConnected ? (
+            <div
+              style={{
+                marginBottom: 14,
+                background: 'rgba(124, 58, 237, 0.08)',
+                border: '1px solid rgba(168, 85, 247, 0.35)',
+                borderRadius: 14,
+                padding: 12,
+                color: '#e4e4e7',
+              }}
+              role="status"
+              aria-live="polite"
+            >
+              <div style={{ fontWeight: 800, marginBottom: 6 }}>GoHighLevel not connected</div>
+              <div style={{ color: '#a1a1aa', fontSize: 13 }}>
+                {ghlStatusLoading
+                  ? 'Checking connection status…'
+                  : 'Connect GoHighLevel to enable voice controls and Copilot.'}
+              </div>
+              {!ghlStatusLoading ? (
+                <div style={{ marginTop: 10, display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={() => onNavigate('/connect/gohighlevel')}
+                    style={{
+                      background: 'linear-gradient(135deg, #7c3aed, #a855f7)',
+                      border: '1px solid rgba(168, 85, 247, 0.45)',
+                      color: '#ffffff',
+                      padding: '10px 14px',
+                      borderRadius: 10,
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Connect GoHighLevel
+                  </button>
+                  {errorMessage ? (
+                    <div style={{ fontSize: 12, color: '#a1a1aa' }}>{errorMessage}</div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           {/* Hero Section with Voice Button */}
           <div className="dashboardHero">
             <div className="dashboardHero__content">
@@ -121,6 +207,7 @@ function Dashboard({ onNavigate }) {
               <button
                 type="button"
                 onClick={fetchInsights}
+                disabled={!ghlConnected}
                 style={{
                   background: 'rgba(255,255,255,0.06)',
                   color: '#ffffff',
@@ -132,7 +219,11 @@ function Dashboard({ onNavigate }) {
               >
                 Refresh
               </button>
-              <VoiceButton onResult={handleVoiceResult} />
+              <VoiceButton
+                onResult={handleVoiceResult}
+                disabled={!ghlConnected}
+                disabledReason="GoHighLevel not connected"
+              />
             </div>
           </div>
           

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import VoiceButton from '../VoiceButton';
 
-function AskBar({ disabled, mode, onAsk, onVoiceResult, transcript }) {
+function AskBar({ disabled, mode, onAsk, onVoiceResult, transcript, hidden = false }) {
   const [value, setValue] = useState('');
 
   const canSend = useMemo(() => {
@@ -15,6 +15,8 @@ function AskBar({ disabled, mode, onAsk, onVoiceResult, transcript }) {
     setValue('');
     onAsk(q);
   };
+
+  if (hidden) return null;
 
   return (
     <form className="askBar" onSubmit={handleSubmit} aria-label="Ask Copilot">
@@ -35,7 +37,7 @@ function AskBar({ disabled, mode, onAsk, onVoiceResult, transcript }) {
       <button
         type="submit"
         className="askBar__btn askBar__btnPrimary"
-        disabled={!canSend}
+        disabled={!canSend || disabled}
         title="Send"
       >
         Send
