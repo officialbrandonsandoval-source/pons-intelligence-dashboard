@@ -5,7 +5,7 @@ import CoreMetrics from '../components/copilot/CoreMetrics';
 import AskBar from '../components/copilot/AskBar';
 import Conversation from '../components/copilot/Conversation';
 import ModeToggle from '../components/copilot/ModeToggle';
-import { postInsights } from '../api/insights';
+import { ask as askCopilot } from '../api/copilot';
 import { speakText } from '../api/voice';
 import { getGHLStatus } from '../api/client';
 import '../styles/copilot.css';
@@ -54,45 +54,61 @@ function CopilotDashboard({ onNavigate }) {
       setGhlConnected(false);
 
       try {
-        // Requirement: Before calling /api/copilot, confirm GHL is connected.
-        // Check: GET {VITE_API_URL}/api/auth/ghl/status?userId=dev
-        const statusRes = await getGHLStatus('dev');
-        const isConnected = Boolean(statusRes?.connected ?? statusRes?.isConnected ?? statusRes?.ok);
+        // Best-effort: check GHL connection, but do not hard-block demo.
+        // In production demos, this call can fail due to CORS if the backend isn't allowing the Vercel origin yet.
+        let isConnected = false;
+        try {
+          const statusRes = await getGHLStatus('dev');
+          isConnected = Boolean(statusRes?.connected ?? statusRes?.isConnected ?? statusRes?.ok);
+        } catch {
+          // Treat as not connected, but allow Copilot demo to proceed.
+          isConnected = false;
+        }
 
         if (cancelled) return;
 
         setGhlConnected(isConnected);
         setGhlStatusLoading(false);
 
-        if (!isConnected) {
-          setStatus('ready');
-          setMessages([
-            {
-              id: makeId(),
-              role: 'assistant',
-              content: 'GoHighLevel is not connected. First connect.',
-            },
-          ]);
-          return;
-        }
-
-        const initialGreeting = 'I’m online. Ask me about cash at risk, velocity, or what to do next.';
+        // Auto-run on load
+        // Requirement: Call /api/copilot with "What is at risk?" and render key metrics.
+        const autoQuery = 'What is at risk?';
 
         setMetrics(null);
-        setMessages([{ id: makeId(), role: 'assistant', content: initialGreeting }]);
+        setMessages([{ id: makeId(), role: 'user', content: autoQuery }]);
         setStatus('ready');
 
+        const fallback = await askCopilot(autoQuery);
+
+        const cashAtRisk = fallback?.structured?.cashAtRisk;
+        const velocity = fallback?.structured?.velocity;
+        const topAction = fallback?.structured?.nextBestAction;
+        const answerText = fallback?.answer || 'No answer returned.';
+
+        if (cancelled) return;
+
+        // Text-only: show assistant answer in chat.
+        setMessages((prev) => [...prev, { id: makeId(), role: 'assistant', content: answerText }]);
+
+        // Render three key metrics (text-only)
+        setMetrics({
+          cashAtRisk: typeof cashAtRisk === 'number' ? { amount: cashAtRisk, deals: 0 } : cashAtRisk,
+          velocity: typeof velocity === 'string' ? { label: velocity, wow: 0 } : velocity,
+          topAction:
+            typeof topAction === 'string'
+              ? { label: topAction, detail: '' }
+              : topAction,
+        });
+
         if (shouldSpeak) {
-          await speakGreeting(initialGreeting);
+          await speakGreeting(answerText);
         }
       } catch (err) {
         if (cancelled) return;
+        // Only fail the page if Copilot itself fails.
         setStatus('error');
         const msg = err?.message || 'Failed to load Copilot';
         setErrorMessage(msg);
-        if (/gohighlevel is not connected/i.test(msg)) {
-          setNeedsGHLConnect(true);
-        }
         setGhlStatusLoading(false);
       }
     };
@@ -118,60 +134,51 @@ function CopilotDashboard({ onNavigate }) {
   }, [mode]);
 
   const handleAsk = async (query) => {
-    if (!ghlConnected) {
-      setMessages((prev) => [
-        ...prev,
-        { id: makeId(), role: 'assistant', content: 'GoHighLevel is not connected. First connect.' },
-      ]);
-      return;
-    }
+    // Demo-friendly: allow Copilot even when GHL isn't connected.
+    // We keep the banner to encourage connecting, but don't block /api/copilot.
 
     const userMsg = { id: makeId(), role: 'user', content: query };
     setMessages((prev) => [...prev, userMsg]);
 
     try {
-      // Requirement: When user asks a question, call POST /api/insights with mock/demo deals
-      const res = await postInsights({
-        userId: 'dev',
-        source: 'demo',
-        query,
-      });
+      // Contract: POST /api/copilot with { query }
+      const res = await askCopilot(query);
 
-      const cashAtRisk = res?.cashAtRisk;
-      const velocity = res?.velocity;
-      const nextBestAction = res?.nextBestAction;
-      const voiceSummary = res?.voiceSummary;
+      const cashAtRisk = res?.structured?.cashAtRisk;
+      const velocity = res?.structured?.velocity;
+      const topAction = res?.structured?.nextBestAction;
+      const answerText = res?.answer || 'No answer returned.';
 
-      const lines = [
-        cashAtRisk ? `Cash at Risk: ${cashAtRisk}` : null,
-        velocity ? `Velocity: ${velocity}` : null,
-        nextBestAction ? `Next Best Action: ${nextBestAction}` : null,
-        voiceSummary ? `Summary: ${voiceSummary}` : null,
-      ].filter(Boolean);
+      // Answer text in chat panel
+      setMessages((prev) => [...prev, { id: makeId(), role: 'assistant', content: answerText }]);
 
-      const text = lines.length > 0 ? lines.join('\n') : 'No insights returned.';
-
-      setMessages((prev) => [...prev, { id: makeId(), role: 'assistant', content: text }]);
-
-      // Display in the metric cards too (text-only, no charts/tables)
+      // Display three key metrics (text-only)
       setMetrics({
         cashAtRisk: typeof cashAtRisk === 'number' ? { amount: cashAtRisk, deals: 0 } : cashAtRisk,
-        velocity:
-          typeof velocity === 'string'
-            ? { label: velocity, wow: 0 }
-            : velocity,
+        velocity: typeof velocity === 'string' ? { label: velocity, wow: 0 } : velocity,
         topAction:
-          typeof nextBestAction === 'string'
-            ? { label: nextBestAction, detail: voiceSummary || '' }
-            : nextBestAction,
-        voiceSummary,
+          typeof topAction === 'string'
+            ? { label: topAction, detail: '' }
+            : topAction,
       });
 
-      // Requirement: Text + voice only
       if (shouldSpeak) {
-        await speakGreeting(voiceSummary || text);
+        await speakGreeting(answerText);
       }
     } catch (err) {
+      const statusCode = err?.status;
+      if (statusCode === 401 || statusCode === 403) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: makeId(),
+            role: 'assistant',
+            content:
+              'Not authorized to access Copilot. Please connect and verify permissions (401/403).',
+          },
+        ]);
+        return;
+      }
       const assistantMsg = {
         id: makeId(),
         role: 'assistant',
@@ -181,16 +188,20 @@ function CopilotDashboard({ onNavigate }) {
     }
   };
 
-  const handleVoiceResult = async () => {
-    // We reuse existing VoiceButton pattern, which currently speaks its own backend response.
-    // In Copilot, we treat voice result as a trigger to refresh the Copilot state.
-    // If your backend returns transcript/command in /api/voice/command, we can wire it later.
-    setLastTranscript('Voice command captured.');
+  const handleVoiceResult = async (result) => {
+    // Requirement: Voice triggers same flow and appends conversation history.
+    const transcript = result?.transcript || result?.text || '';
+    if (transcript) setLastTranscript(transcript);
+
+    const query = transcript || 'What is at risk?';
+    await handleAsk(query);
   };
 
   const containerClass = `copilotGrid ${mode === 'voice' ? 'voiceOnly' : ''}`;
 
-  const isConnectedGateOpen = ghlConnected && !ghlStatusLoading;
+  // Demo-friendly: treat the page as usable even if GHL isn't connected.
+  // We still show the connect banner when disconnected.
+  const isConnectedGateOpen = !ghlStatusLoading;
 
   return (
     <div className="copilotPage">

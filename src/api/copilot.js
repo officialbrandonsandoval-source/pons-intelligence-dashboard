@@ -1,26 +1,33 @@
-import { api, apiClient } from './client';
+import { api } from './client';
 
+/**
+ * Copilot ask endpoint contract:
+ * - POST /api/copilot
+ * - JSON body: { query }
+ * - Returns: { answer, structured }
+ */
+export async function ask(query) {
+  const q = (query ?? '').toString().trim();
+  if (!q) {
+    throw new Error('Query is required');
+  }
+
+  const res = await api.post('/api/copilot', { query: q });
+  const data = res?.data;
+
+  return {
+    answer: data?.answer ?? data?.response ?? data?.message ?? '',
+    structured: data?.structured ?? data?.data ?? data?.result ?? null,
+  };
+}
+
+// Backwards-compatible exports (legacy)
 export const copilotAPI = {
-  async init({ source, userId, mode }) {
-    return apiClient.post('/api/copilot', {
-      source,
-      userId,
-      mode,
-    });
-  },
-
-  async ask({ source, userId, mode, query }) {
-    return apiClient.post('/api/copilot', {
-      source,
-      userId,
-      mode,
-      query,
-    });
+  async ask({ query }) {
+    return ask(query);
   },
 };
 
-// Requested API shape
 export async function askCopilot(query) {
-  const res = await api.post('/api/copilot', { query });
-  return res.data;
+  return ask(query);
 }

@@ -1,5 +1,11 @@
 import { api, apiClient } from './client';
 
+// DEMO MODE (forced)
+// - No MediaRecorder usage
+// - No real audio upload
+// - Still calls backend endpoints so UI/backends can be demoed end-to-end
+export const demoMode = true;
+
 // Rules enforced:
 // - All requests go through client.js (apiClient)
 // - No fetch()
@@ -22,7 +28,26 @@ export async function startVoiceSession() {
 
 export async function sendVoiceCommand({ audioBlob, sessionId }) {
   // Endpoint: POST /api/voice/command
-  // Ensure: FormData used for audio
+  // DEMO MODE: Ignore real audio.
+  // Still call the endpoint, but send JSON so the backend can respond with a transcript/response.
+  if (demoMode) {
+    const data = await apiClient.post('/api/voice/command', {
+      sessionId: sessionId || null,
+      demo: true,
+      // Optional placeholder for backends that want it
+      audio: null,
+    });
+
+    return {
+      transcript: data?.transcript ?? data?.text ?? data?.query ?? '',
+      response: data?.response ?? data?.answer ?? data?.message ?? data?.text ?? '',
+      text: data?.text ?? data?.response ?? data?.answer ?? data?.message ?? '',
+      raw: data,
+      demo: true,
+    };
+  }
+
+  // Non-demo path: FormData used for audio
   if (!audioBlob) {
     throw new Error('sendVoiceCommand requires audioBlob');
   }
@@ -33,7 +58,15 @@ export async function sendVoiceCommand({ audioBlob, sessionId }) {
     formData.append('sessionId', sessionId);
   }
 
-  return apiClient.postFormData('/api/voice/command', formData);
+  const data = await apiClient.postFormData('/api/voice/command', formData);
+
+  return {
+    transcript: data?.transcript ?? data?.text ?? '',
+    response: data?.response ?? data?.answer ?? data?.message ?? '',
+    text: data?.text ?? data?.response ?? data?.answer ?? data?.message ?? '',
+    raw: data,
+    demo: false,
+  };
 }
 
 export async function speakText({ text, voice, format } = {}) {
@@ -91,6 +124,10 @@ export class VoiceRecorder {
   }
 
   async initialize() {
+    if (demoMode) {
+      // In demo mode we must not access mic APIs.
+      return true;
+    }
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
@@ -107,6 +144,10 @@ export class VoiceRecorder {
   }
 
   startRecording() {
+    if (demoMode) {
+      // No-op in demo mode.
+      return;
+    }
     if (!this.stream) {
       throw new Error('Microphone not initialized');
     }
@@ -124,6 +165,10 @@ export class VoiceRecorder {
   }
 
   stopRecording() {
+    if (demoMode) {
+      // Return a placeholder blob so callers that expect one don't break.
+      return Promise.resolve(new Blob([], { type: 'audio/webm' }));
+    }
     return new Promise((resolve, reject) => {
       if (!this.mediaRecorder) {
         reject(new Error('No active recording'));
@@ -144,6 +189,12 @@ export class VoiceRecorder {
   }
 
   cleanup() {
+    if (demoMode) {
+      this.mediaRecorder = null;
+      this.audioChunks = [];
+      this.stream = null;
+      return;
+    }
     if (this.stream) {
       this.stream.getTracks().forEach(track => track.stop());
       this.stream = null;

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { VoiceRecorder, startSession, sendVoiceCommand, speakText } from '../api/voice';
+import { demoMode, VoiceRecorder, startSession, sendVoiceCommand, speakText } from '../api/voice';
 import '../styles/components/VoiceButton.css';
 
 // Voice states
@@ -19,14 +19,12 @@ function VoiceButton({ onResult, disabled = false, disabledReason = '' }) {
   const sessionIdRef = useRef(null);
 
   useEffect(() => {
-    // Initialize voice recorder on mount
-    recorderRef.current = new VoiceRecorder();
+    // IMPORTANT: In demoMode we must never touch mic/MediaRecorder APIs.
+    recorderRef.current = demoMode ? null : new VoiceRecorder();
     
     return () => {
       // Cleanup on unmount
-      if (recorderRef.current) {
-        recorderRef.current.cleanup();
-      }
+      recorderRef.current?.cleanup?.();
     };
   }, []);
 
@@ -68,7 +66,36 @@ function VoiceButton({ onResult, disabled = false, disabledReason = '' }) {
       // Fail fast: do not request microphone until backend session start succeeds.
       // Requirement: 1) POST /api/voice/session/start
       const sessionData = await startSession();
-      sessionIdRef.current = sessionData?.sessionId;
+      sessionIdRef.current = sessionData?.sessionId || sessionData?.id || null;
+
+      // Forced demo mode: do not access mic/audio, but still call /api/voice/command.
+      if (demoMode) {
+        setVoiceState(VOICE_STATES.LISTENING);
+        setErrorMessage('');
+
+        const result = await sendVoiceCommand({
+          sessionId: sessionIdRef.current,
+          audioBlob: null,
+        });
+
+        const transcript = result?.transcript || '';
+        const response = result?.response || result?.text || '';
+        const combined = [transcript, response].filter(Boolean).join('\n');
+
+        setVoiceState(VOICE_STATES.READY);
+        setErrorMessage(combined || 'Demo voice completed.');
+        if (typeof onResult === 'function') {
+          onResult({
+            text: combined || response || transcript || 'Demo voice completed.',
+            transcript,
+            response,
+            demo: true,
+            raw: result?.raw ?? result,
+            sessionId: sessionIdRef.current,
+          });
+        }
+        return;
+      }
 
       // Demo mode: if the backend returns text on session start,
       // treat voice as "ready" and skip audio capture/upload entirely.
@@ -87,12 +114,12 @@ function VoiceButton({ onResult, disabled = false, disabledReason = '' }) {
       setErrorMessage('');
 
       // Initialize microphone if needed
-      if (!recorderRef.current.stream) {
-        await recorderRef.current.initialize();
+      if (!recorderRef.current?.stream) {
+        await recorderRef.current?.initialize();
       }
 
       // Start recording
-      recorderRef.current.startRecording();
+      recorderRef.current?.startRecording();
     } catch (error) {
       // Requirement: 3) If error → surface JSON error message
       // Our axios client wraps JSON payload messages into error.message already.
@@ -100,7 +127,6 @@ function VoiceButton({ onResult, disabled = false, disabledReason = '' }) {
       throw new Error(msg);
     }
   };
-
   const stopRecording = async () => {
     // If we're in demo-ready mode, do nothing (no audio upload).
     if (voiceState === VOICE_STATES.READY) {
@@ -119,7 +145,6 @@ function VoiceButton({ onResult, disabled = false, disabledReason = '' }) {
         audioBlob,
         sessionId: sessionIdRef.current,
       });
-
       if (typeof onResult === 'function') {
         onResult(response);
       }
