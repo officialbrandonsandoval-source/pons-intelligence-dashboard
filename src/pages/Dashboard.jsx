@@ -5,7 +5,7 @@ import TopActionCard from '../components/dashboard/TopActionCard';
 import RevenueLeaks from '../components/dashboard/RevenueLeaks';
 import DealPipeline from '../components/DealPipeline';
 import LoadingState from '../components/dashboard/LoadingState';
-import { apiClient } from '../api/client';
+import { apiClient, apiUrl } from '../api/client';
 import '../styles/pages/Dashboard.css';
 
 function Dashboard({ onNavigate }) {
@@ -16,7 +16,10 @@ function Dashboard({ onNavigate }) {
   // Local helper to keep this change self-contained.
   // Expected backend response: { insight: ... }
   const getInsights = useCallback(async ({ source, userId }) => {
-    return apiClient.get(`/api/insights?source=${encodeURIComponent(source)}&userId=${encodeURIComponent(userId)}`);
+    const url = apiUrl(
+      `api/insights?source=${encodeURIComponent(source)}&userId=${encodeURIComponent(userId)}`
+    );
+    return apiClient.get(url);
   }, []);
 
   const fetchInsights = useCallback(async () => {

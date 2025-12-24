@@ -1,70 +1,86 @@
-import { apiClient } from './client';
+import { api, apiClient } from './client';
 
-// Voice API for sending commands and receiving responses
-export const voiceAPI = {
-  // Start a new voice session
-  async startSession() {
-    try {
-      return await apiClient.post('/api/voice/session/start', {
-        timestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      console.error('Failed to start voice session:', error);
-      throw error;
-    }
-  },
+// Rules enforced:
+// - All requests go through client.js (apiClient)
+// - No fetch()
+// - No manual base URLs / port references
+// - Errors are surfaced (never swallowed)
 
-  // End an active voice session
-  async endSession(sessionId) {
-    try {
-      return await apiClient.post('/api/voice/session/end', { sessionId });
-    } catch (error) {
-      console.error('Failed to end voice session:', error);
-      throw error;
-    }
-  },
+export async function startSession() {
+  // Endpoint: POST /api/voice/session/start
+  // Contract requirement: must call {VITE_API_URL}/api/voice/session/start (never same-origin /api).
+  return apiClient.post('api/voice/session/start', {
+    timestamp: new Date().toISOString(),
+  });
+}
 
-  // Upload audio to backend as multipart/form-data
-  // Endpoint requirement: POST /api/voice/command
-  async sendAudioBlob(audioBlob, sessionId) {
-    try {
-      const formData = new FormData();
-      formData.append('audio', audioBlob, 'recording.webm');
-      if (sessionId) {
-        formData.append('sessionId', sessionId);
-      }
+// Requested API shape
+export async function startVoiceSession() {
+  const res = await api.post('/api/voice/session/start');
+  return res.data;
+}
 
-      return await apiClient.postFormData('/api/voice/command', formData);
-    } catch (error) {
-      console.error('Failed to send audio:', error);
-      throw error;
-    }
-  },
+export async function sendVoiceCommand({ audioBlob, sessionId }) {
+  // Endpoint: POST /api/voice/command
+  // Ensure: FormData used for audio
+  if (!audioBlob) {
+    throw new Error('sendVoiceCommand requires audioBlob');
+  }
 
-  // Send a text command (for testing or fallback)
-  async sendTextCommand(command, sessionId) {
-    try {
-      return await apiClient.post('/api/voice/command', {
-        command,
-        sessionId,
-        timestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      console.error('Failed to send text command:', error);
-      throw error;
-    }
-  },
+  const formData = new FormData();
+  formData.append('audio', audioBlob, 'recording.webm');
+  if (sessionId) {
+    formData.append('sessionId', sessionId);
+  }
 
-  // Get transcript for a session
-  async getTranscript(sessionId) {
-    try {
-      return await apiClient.get(`/api/voice/transcript/${sessionId}`);
-    } catch (error) {
-      console.error('Failed to get transcript:', error);
-      throw error;
-    }
-  },
-};
+  return apiClient.postFormData('api/voice/command', formData);
+}
+
+export async function speakText({ text, voice, format } = {}) {
+  // Endpoint: POST /api/voice/speak
+  if (!text || String(text).trim().length === 0) {
+    throw new Error('speakText requires non-empty text');
+  }
+
+  return apiClient.post('api/voice/speak', {
+    text,
+    ...(voice ? { voice } : {}),
+    ...(format ? { format } : {}),
+  });
+}
+
+export async function playAudioResponse(audioResponse, { autoPlay = true } = {}) {
+  // Plays audio returned by /api/voice/speak.
+  // Supports common response shapes:
+  // - Blob/ArrayBuffer (if apiClient is later extended)
+  // - { audioUrl }
+  // - { audio: "data:audio/...;base64,..." }
+
+  if (!audioResponse) {
+    throw new Error('playAudioResponse requires an audioResponse');
+  }
+
+  let src = null;
+
+  if (typeof audioResponse === 'string') {
+    src = audioResponse;
+  } else if (audioResponse?.audioUrl && typeof audioResponse.audioUrl === 'string') {
+    src = audioResponse.audioUrl;
+  } else if (audioResponse?.audio && typeof audioResponse.audio === 'string') {
+    src = audioResponse.audio;
+  } else {
+    throw new Error('Unsupported audio response shape from /api/voice/speak');
+  }
+
+  const audio = new Audio(src);
+  audio.preload = 'auto';
+
+  if (autoPlay) {
+    await audio.play();
+  }
+
+  return audio;
+}
 
 // Voice Recording Manager using MediaRecorder
 export class VoiceRecorder {
@@ -136,44 +152,3 @@ export class VoiceRecorder {
     this.audioChunks = [];
   }
 }
-
-// Text-to-Speech utility
-export const speakText = (text, options = {}) => {
-  if (!('speechSynthesis' in window)) {
-    console.warn('Speech synthesis not supported');
-    return Promise.resolve();
-  }
-
-  return new Promise((resolve, reject) => {
-    const utterance = new SpeechSynthesisUtterance(text);
-    
-    // Configure voice settings
-    utterance.rate = options.rate || 1.0;
-    utterance.pitch = options.pitch || 1.0;
-    utterance.volume = options.volume || 1.0;
-    utterance.lang = options.lang || 'en-US';
-
-    // Select voice if specified
-    if (options.voiceName) {
-      const voices = speechSynthesis.getVoices();
-      const voice = voices.find(v => v.name === options.voiceName);
-      if (voice) {
-        utterance.voice = voice;
-      }
-    }
-
-    utterance.onend = () => resolve();
-    utterance.onerror = (error) => reject(error);
-
-    // Cancel any ongoing speech
-    speechSynthesis.cancel();
-    speechSynthesis.speak(utterance);
-  });
-};
-
-// Helper to stop any ongoing speech
-export const stopSpeaking = () => {
-  if ('speechSynthesis' in window) {
-    speechSynthesis.cancel();
-  }
-};

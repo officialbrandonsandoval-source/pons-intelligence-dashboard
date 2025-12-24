@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { VoiceRecorder, voiceAPI, speakText, stopSpeaking } from '../api/voice';
+import { VoiceRecorder, startSession, sendVoiceCommand, speakText } from '../api/voice';
 import '../styles/components/VoiceButton.css';
 
 // Voice states
@@ -11,7 +11,7 @@ const VOICE_STATES = {
   ERROR: 'error',
 };
 
-function VoiceButton() {
+function VoiceButton({ onResult, disabled = false, disabledReason = '' }) {
   const [voiceState, setVoiceState] = useState(VOICE_STATES.IDLE);
   const [errorMessage, setErrorMessage] = useState('');
   const recorderRef = useRef(null);
@@ -26,12 +26,17 @@ function VoiceButton() {
       if (recorderRef.current) {
         recorderRef.current.cleanup();
       }
-      stopSpeaking();
     };
   }, []);
 
   const handleVoiceClick = async () => {
     try {
+      if (disabled) {
+        setErrorMessage(disabledReason || 'Voice is disabled until GoHighLevel is connected.');
+        setVoiceState(VOICE_STATES.ERROR);
+        return;
+      }
+
       switch (voiceState) {
         case VOICE_STATES.IDLE:
           await startRecording();
@@ -65,7 +70,7 @@ function VoiceButton() {
       }
 
       // Start a new session
-      const sessionData = await voiceAPI.startSession();
+      const sessionData = await startSession();
       sessionIdRef.current = sessionData.sessionId;
 
       // Start recording
@@ -87,24 +92,22 @@ function VoiceButton() {
       const audioBlob = await recorderRef.current.stopRecording();
 
       // Send audio to backend for processing
-      const response = await voiceAPI.sendAudioBlob(
+      const response = await sendVoiceCommand({
         audioBlob,
-        sessionIdRef.current
-      );
+        sessionId: sessionIdRef.current,
+      });
+
+      if (typeof onResult === 'function') {
+        onResult(response);
+      }
 
       // Handle the response
       if (response.text) {
         setVoiceState(VOICE_STATES.SPEAKING);
-        await speakText(response.text);
+        await speakText({ text: response.text });
         setVoiceState(VOICE_STATES.IDLE);
       } else {
         setVoiceState(VOICE_STATES.IDLE);
-      }
-
-      // End session
-      if (sessionIdRef.current) {
-        await voiceAPI.endSession(sessionIdRef.current);
-        sessionIdRef.current = null;
       }
     } catch (error) {
       console.error('Processing error:', error);
@@ -150,7 +153,7 @@ function VoiceButton() {
       <button
         className={`voice-button ${voiceState}`}
         onClick={handleVoiceClick}
-        disabled={voiceState === VOICE_STATES.PROCESSING}
+        disabled={disabled || voiceState === VOICE_STATES.PROCESSING}
         aria-label={label}
         title={label}
       >

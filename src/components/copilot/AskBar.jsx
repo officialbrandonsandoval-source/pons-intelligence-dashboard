@@ -26,7 +26,11 @@ function AskBar({ disabled, mode, onAsk, onVoiceResult, transcript }) {
         disabled={disabled || mode === 'voice'}
       />
 
-      <VoiceButton onResult={onVoiceResult} />
+      <VoiceButton
+        onResult={onVoiceResult}
+        disabled={disabled}
+        disabledReason="GoHighLevel is not connected. First connect."
+      />
 
       <button
         type="submit"

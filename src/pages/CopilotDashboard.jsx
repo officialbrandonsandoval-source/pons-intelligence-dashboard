@@ -6,7 +6,8 @@ import AskBar from '../components/copilot/AskBar';
 import Conversation from '../components/copilot/Conversation';
 import ModeToggle from '../components/copilot/ModeToggle';
 import { copilotAPI } from '../api/copilot';
-import { apiClient } from '../api/client';
+import { speakText } from '../api/voice';
+import { getGHLStatus } from '../api/client';
 import '../styles/copilot.css';
 
 const makeId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -15,6 +16,9 @@ function CopilotDashboard({ onNavigate }) {
   const [mode, setMode] = useState('hybrid'); // silent | hybrid | voice
   const [status, setStatus] = useState('loading'); // loading | ready | error
   const [errorMessage, setErrorMessage] = useState('');
+  const [needsGHLConnect, setNeedsGHLConnect] = useState(false);
+  const [ghlConnected, setGhlConnected] = useState(false);
+  const [ghlStatusLoading, setGhlStatusLoading] = useState(true);
 
   const [metrics, setMetrics] = useState(null);
   const [topActionOpen, setTopActionOpen] = useState(false);
@@ -30,10 +34,10 @@ function CopilotDashboard({ onNavigate }) {
   const shouldSpeak = mode === 'hybrid' || mode === 'voice';
 
   const speakGreeting = async (text) => {
-    // Use existing /api/voice/speak endpoint.
-    // If backend doesn’t support it yet, this will fail silently.
+    // Use centralized voice API.
+    // This still stays non-blocking to keep UI smooth.
     try {
-      await apiClient.post('/api/voice/speak', { text });
+      await speakText({ text });
     } catch {
       // Intentionally ignore to keep UI smooth.
     }
@@ -45,8 +49,33 @@ function CopilotDashboard({ onNavigate }) {
     const init = async () => {
       setStatus('loading');
       setErrorMessage('');
+      setNeedsGHLConnect(false);
+      setGhlStatusLoading(true);
+      setGhlConnected(false);
 
       try {
+        // Requirement: Before calling /api/copilot, confirm GHL is connected.
+        // Check: GET {VITE_API_URL}/api/auth/ghl/status?userId=dev
+        const statusRes = await getGHLStatus('dev');
+        const isConnected = Boolean(statusRes?.connected ?? statusRes?.isConnected ?? statusRes?.ok);
+
+        if (cancelled) return;
+
+        setGhlConnected(isConnected);
+        setGhlStatusLoading(false);
+
+        if (!isConnected) {
+          setStatus('ready');
+          setMessages([
+            {
+              id: makeId(),
+              role: 'assistant',
+              content: 'GoHighLevel is not connected. First connect.',
+            },
+          ]);
+          return;
+        }
+
         const res = await copilotAPI.init({
           source: 'gohighlevel',
           userId: 'dev',
@@ -70,7 +99,12 @@ function CopilotDashboard({ onNavigate }) {
       } catch (err) {
         if (cancelled) return;
         setStatus('error');
-        setErrorMessage(err?.message || 'Failed to load Copilot');
+        const msg = err?.message || 'Failed to load Copilot';
+        setErrorMessage(msg);
+        if (/gohighlevel is not connected/i.test(msg)) {
+          setNeedsGHLConnect(true);
+        }
+        setGhlStatusLoading(false);
       }
     };
 
@@ -95,6 +129,14 @@ function CopilotDashboard({ onNavigate }) {
   }, [mode]);
 
   const handleAsk = async (query) => {
+    if (!ghlConnected) {
+      setMessages((prev) => [
+        ...prev,
+        { id: makeId(), role: 'assistant', content: 'GoHighLevel is not connected. First connect.' },
+      ]);
+      return;
+    }
+
     const userMsg = { id: makeId(), role: 'user', content: query };
     setMessages((prev) => [...prev, userMsg]);
 
@@ -136,6 +178,8 @@ function CopilotDashboard({ onNavigate }) {
 
   const containerClass = `copilotGrid ${mode === 'voice' ? 'voiceOnly' : ''}`;
 
+  const isConnectedGateOpen = ghlConnected && !ghlStatusLoading;
+
   return (
     <div className="copilotPage">
       <Navbar onNavigate={onNavigate} />
@@ -146,9 +190,74 @@ function CopilotDashboard({ onNavigate }) {
           <ModeToggle mode={mode} onChange={setMode} />
         </header>
 
+        {!isConnectedGateOpen ? (
+          <div
+            style={{
+              marginTop: 12,
+              background: 'rgba(124, 58, 237, 0.08)',
+              border: '1px solid rgba(168, 85, 247, 0.35)',
+              borderRadius: 14,
+              padding: 12,
+              color: '#e4e4e7',
+            }}
+            role="status"
+            aria-live="polite"
+          >
+            <div style={{ fontWeight: 800, marginBottom: 6 }}>
+              GoHighLevel is not connected. First connect.
+            </div>
+            <div style={{ color: '#a1a1aa', fontSize: 13 }}>
+              {ghlStatusLoading
+                ? 'Checking connection status…'
+                : 'Connect your GoHighLevel account to enable Copilot and voice controls.'}
+            </div>
+            <div style={{ marginTop: 10 }}>
+              <button
+                type="button"
+                onClick={() => onNavigate('/connect/gohighlevel')}
+                style={{
+                  background: 'linear-gradient(135deg, #7c3aed, #a855f7)',
+                  border: '1px solid rgba(168, 85, 247, 0.45)',
+                  color: '#ffffff',
+                  padding: '10px 14px',
+                  borderRadius: 10,
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                }}
+              >
+                Connect GoHighLevel
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         {status === 'error' ? (
           <div style={{ marginTop: 16, color: '#a1a1aa' }}>
-            {errorMessage}
+            <div>{errorMessage}</div>
+
+            {needsGHLConnect ? (
+              <div style={{ marginTop: 12 }}>
+                <button
+                  type="button"
+                  onClick={() => onNavigate('/connect/gohighlevel')}
+                  style={{
+                    background: 'linear-gradient(135deg, #7c3aed, #a855f7)',
+                    border: '1px solid rgba(168, 85, 247, 0.45)',
+                    color: '#ffffff',
+                    padding: '10px 14px',
+                    borderRadius: 10,
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Connect GoHighLevel
+                </button>
+
+                <div style={{ marginTop: 8, fontSize: 13, color: '#71717a' }}>
+                  Once connected, come back here and I’ll be able to answer using your real CRM data.
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -171,7 +280,7 @@ function CopilotDashboard({ onNavigate }) {
           <section className="conversation" aria-label="Copilot conversation">
             <Conversation messages={messages} />
             <AskBar
-              disabled={status !== 'ready'}
+              disabled={status !== 'ready' || !isConnectedGateOpen}
               mode={mode}
               onAsk={handleAsk}
               onVoiceResult={handleVoiceResult}
