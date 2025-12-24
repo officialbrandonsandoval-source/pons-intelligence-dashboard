@@ -38,7 +38,7 @@ export function apiUrl(pathname) {
   return `${API_BASE}${pathname}`;
 }
 
-const API_KEY = import.meta.env.VITE_API_KEY ?? '';
+const API_KEY = (import.meta.env.VITE_API_KEY ?? '').toString().trim();
 
 class APIError extends Error {
   constructor(message, { status, payload } = {}) {
@@ -56,9 +56,7 @@ export const axiosClient = axios.create({
   // Keep baseURL set for convenience, but apiClient below still forces absolute URLs.
   // This prevents accidental same-origin requests if someone passes a relative path.
   baseURL: API_BASE,
-  headers: {
-    'x-api-key': API_KEY,
-  },
+  headers: API_KEY ? { 'x-api-key': API_KEY } : {},
 });
 
 // Simplified axios instance (requested contract):
@@ -96,7 +94,7 @@ api.interceptors.response.use(
 
 axiosClient.interceptors.request.use((config) => {
   config.headers = config.headers || {};
-  config.headers['x-api-key'] = API_KEY;
+  if (API_KEY) config.headers['x-api-key'] = API_KEY;
   return config;
 });
 

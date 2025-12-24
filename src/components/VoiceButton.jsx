@@ -5,6 +5,7 @@ import '../styles/components/VoiceButton.css';
 // Voice states
 const VOICE_STATES = {
   IDLE: 'idle',
+  READY: 'ready',
   LISTENING: 'listening',
   PROCESSING: 'processing',
   SPEAKING: 'speaking',
@@ -69,6 +70,18 @@ function VoiceButton({ onResult, disabled = false, disabledReason = '' }) {
       const sessionData = await startSession();
       sessionIdRef.current = sessionData?.sessionId;
 
+      // Demo mode: if the backend returns text on session start,
+      // treat voice as "ready" and skip audio capture/upload entirely.
+      const demoText = sessionData?.text || sessionData?.message || sessionData?.response;
+      if (demoText) {
+        setVoiceState(VOICE_STATES.READY);
+        setErrorMessage(String(demoText));
+        if (typeof onResult === 'function') {
+          onResult({ text: String(demoText), demo: true, sessionId: sessionIdRef.current || null });
+        }
+        return;
+      }
+
       // Requirement: 2) If success → show "Listening"
       setVoiceState(VOICE_STATES.LISTENING);
       setErrorMessage('');
@@ -89,6 +102,12 @@ function VoiceButton({ onResult, disabled = false, disabledReason = '' }) {
   };
 
   const stopRecording = async () => {
+    // If we're in demo-ready mode, do nothing (no audio upload).
+    if (voiceState === VOICE_STATES.READY) {
+      setVoiceState(VOICE_STATES.IDLE);
+      return;
+    }
+
     setVoiceState(VOICE_STATES.PROCESSING);
 
     try {
@@ -122,6 +141,11 @@ function VoiceButton({ onResult, disabled = false, disabledReason = '' }) {
 
   const getButtonContent = () => {
     switch (voiceState) {
+      case VOICE_STATES.READY:
+        return {
+          icon: <MicrophoneIcon />,
+          label: 'Ready',
+        };
       case VOICE_STATES.LISTENING:
         return {
           icon: <RecordingIcon />,
